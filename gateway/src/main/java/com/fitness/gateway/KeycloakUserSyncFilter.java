@@ -13,48 +13,56 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-@Component
 @Slf4j
+@Component
 @RequiredArgsConstructor
 public class KeycloakUserSyncFilter implements WebFilter {
+
     private final UserService userService;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String token = exchange.getRequest().getHeaders().getFirst("Authorization");
-        String userId = exchange.getRequest().getHeaders().getFirst("X-User-ID");
-        RegisterRequest registerRequest = getUserDetails(token);
 
+        if (token == null || !token.startsWith("Bearer ")) {
+            log.warn("No valid Bearer token found. Continuing request without Keycloak sync.");
+            return chain.filter(exchange);
+        }
+
+        RegisterRequest registerRequest = getUserDetails(token);
+        if (registerRequest == null) {
+            log.error("Failed to parse Keycloak token into RegisterRequest.");
+            return chain.filter(exchange);
+        }
+
+        String userId = exchange.getRequest().getHeaders().getFirst("X-User-ID");
         if (userId == null) {
             userId = registerRequest.getKeycloakId();
         }
 
-        if (userId != null && token != null){
-            String finalUserId = userId;
-            return userService.validateUser(userId)
-                    .flatMap(exist -> {
-                        if (!exist) {
-                            // Register User
+        String finalUserId = userId;
 
-                            if (registerRequest != null) {
-                                return userService.registerUser(registerRequest)
-                                        .then(Mono.empty());
-                            } else {
-                                return Mono.empty();
-                            }
-                        } else {
-                            log.info("User already exist, Skipping sync.");
-                            return Mono.empty();
-                        }
-                    })
-                    .then(Mono.defer(() -> {
-                        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                                .header("X-User-ID", finalUserId)
-                                .build();
-                        return chain.filter(exchange.mutate().request(mutatedRequest).build());
-                    }));
-        }
-        return chain.filter(exchange);
+        return userService.validateUser(finalUserId)
+                .flatMap(exists -> {
+                    if (!exists) {
+                        log.info("User does not exist. Registering new user: {}", registerRequest.getEmail());
+                        return userService.registerUser(registerRequest).then();
+                    } else {
+                        log.info("User already exists, skipping registration.");
+                        return Mono.empty();
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.error("Error validating or registering user: {}", e.getMessage());
+                    return Mono.empty();
+                })
+                .then(Mono.defer(() -> {
+                    ServerHttpRequest mutatedRequest = exchange.getRequest()
+                            .mutate()
+                            .header("X-User-ID", finalUserId)
+                            .build();
+                    return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                }));
     }
 
     private RegisterRequest getUserDetails(String token) {
@@ -71,7 +79,7 @@ public class KeycloakUserSyncFilter implements WebFilter {
             registerRequest.setLastName(claims.getStringClaim("family_name"));
             return registerRequest;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to extract user details from token: {}", e.getMessage());
             return null;
         }
     }
