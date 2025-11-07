@@ -3,10 +3,18 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo "Starting build for CONFIGSERVER"
+      - echo "🔧 Installing JDK 21..."
+      - apt-get update -y
+      - apt-get install -y openjdk-21-jdk
+      - export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+      - export PATH=$JAVA_HOME/bin:$PATH
+      - java -version
+
+      - echo "🚀 Starting build for CONFIGSERVER"
       - cd configserver
       - mvn clean package -DskipTests
-      - echo Logging in to Amazon ECR...
+
+      - echo "🔐 Logging in to Amazon ECR..."
       - aws --version
       - REPOSITORY_URI=965317435749.dkr.ecr.eu-north-1.amazonaws.com/fitness-configserver
       - aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin $REPOSITORY_URI
@@ -14,16 +22,16 @@ phases:
 
   build:
     commands:
-      - echo "Building Docker image..."
+      - echo "🏗️ Building Docker image..."
       - docker build -t $REPOSITORY_URI:latest ./configserver
       - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
 
   post_build:
     commands:
-      - echo "Pushing Docker images to ECR..."
+      - echo "📦 Pushing Docker images to ECR..."
       - docker push $REPOSITORY_URI:latest
       - docker push $REPOSITORY_URI:$IMAGE_TAG
-      - echo "Writing imagedefinitions.json..."
+      - echo "📝 Writing imagedefinitions.json..."
       - printf '[{"name":"configserver","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
       - cat imagedefinitions.json
 
