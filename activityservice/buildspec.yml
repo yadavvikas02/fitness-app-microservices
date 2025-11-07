@@ -1,0 +1,36 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+
+  pre_build:
+    commands:
+      - echo "🚀 Starting build for ACTIVITYSERVICE..."
+      - mvn -f activityservice/pom.xml clean package -DskipTests
+      - echo "🔐 Logging in to Amazon ECR..."
+      - REPOSITORY_URI=965317435749.dkr.ecr.eu-north-1.amazonaws.com/fitness-activityservice
+      - aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin $REPOSITORY_URI
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
+
+  build:
+    commands:
+      - echo "🏗️ Building Docker image for ACTIVITYSERVICE..."
+      - docker build -t $REPOSITORY_URI:latest ./activityservice
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo "📦 Pushing Docker image to ECR..."
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo "✅ Build completed successfully!"
+      - echo "Writing imagedefinitions.json..."
+      - printf '[{"name":"fitness-activityservice","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
+    - activityservice/target/activityservice-0.0.1-SNAPSHOT.jar
