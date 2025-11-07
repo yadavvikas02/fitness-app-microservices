@@ -3,12 +3,14 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - echo "🔧 Installing JDK 23..."
+      - echo "🔧 Installing JDK 23 (Temurin)..."
       - apt-get update -y
-      - apt-get install -y wget
-      - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.deb
-      - apt install -y ./jdk-23_linux-x64_bin.deb
-      - export JAVA_HOME=/usr/lib/jvm/jdk-23
+      - apt-get install -y wget apt-transport-https gnupg
+      - wget -O- https://packages.adoptium.net/artifactory/api/gpg/key/public | apt-key add -
+      - echo "deb [arch=amd64] https://packages.adoptium.net/artifactory/deb jammy main" | tee /etc/apt/sources.list.d/adoptium.list
+      - apt-get update -y
+      - apt-get install -y temurin-23-jdk
+      - export JAVA_HOME=/usr/lib/jvm/temurin-23-jdk-amd64
       - export PATH=$JAVA_HOME/bin:$PATH
       - java -version
 
