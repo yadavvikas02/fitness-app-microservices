@@ -1,4 +1,5 @@
-FROM eclipse-temurin:23-jdk-jammy
+FROM eclipse-temurin:23-jdk
 WORKDIR /app
-COPY target/*.jar app.jar
+COPY target/configserver-0.0.1-SNAPSHOT.jar app.jar
+EXPOSE 8888
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

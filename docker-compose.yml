@@ -1,55 +1,73 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  eureka:
-    image: vikass02/eureka:latest
-    container_name: eureka
-    ports:
-      - "8761:8761"
-    restart: always
-
   configserver:
-    image: vikass02/configserver:latest
-    container_name: configserver
-    depends_on:
-      - eureka
+    build: ./configserver
     ports:
       - "8888:8888"
     restart: always
+    networks:
+      - fitness-net
 
-  gateway:
-    image: vikass02/gateway:latest
-    container_name: gateway
-    depends_on:
-      - eureka
-      - configserver
+  eureka:
+    build: ./eureka
     ports:
-      - "8080:8080"
-    restart: always
+      - "8761:8761"
+    depends_on:
+      - configserver
+    networks:
+      - fitness-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - fitness-net
 
   userservice:
-    image: vikass02/userservice:latest
-    container_name: userservice
-    depends_on:
-      - eureka
+    build: ./userservice
     ports:
       - "8081:8081"
-    restart: always
+    depends_on:
+      - configserver
+      - eureka
+      - rabbitmq
+    networks:
+      - fitness-net
 
   activityservice:
-    image: vikass02/activityservice:latest
-    container_name: activityservice
+    build: ./activityservice
     ports:
       - "8082:8082"
-    restart: always
+    depends_on:
+      - configserver
+      - eureka
+      - rabbitmq
+    networks:
+      - fitness-net
 
   aiservice:
-    image: vikass02/aiservice:latest
-    container_name: aiservice
+    build: ./aiservice
     ports:
       - "8083:8083"
-    restart: always
+    depends_on:
+      - configserver
+      - eureka
+      - rabbitmq
+    networks:
+      - fitness-net
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka
+    networks:
+      - fitness-net
 
 networks:
-  default:
-    name: fitness-net
+  fitness-net:
+    driver: bridge
